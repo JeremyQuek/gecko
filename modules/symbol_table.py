@@ -1,7 +1,7 @@
 
 from copy import deepcopy
 from collections import defaultdict
-from modules.type_lattice import Unassigned, lattice_join
+from modules.type_lattice import Unassigned, join
 
 class SymbolTableEntry():
     def __init__(self, line, _type, scope):
@@ -62,7 +62,7 @@ class SymbolTable():
 
             merged_type = Unassigned()
             for _type in branch_types:
-                merged_type = lattice_join(merged_type, _type)
+                merged_type = join(merged_type, _type)
 
             self.insert(identifier, merged_type, merge_line,scope)
 

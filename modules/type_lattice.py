@@ -1,3 +1,6 @@
+class Concrete():
+    pass
+
 class Unassigned():
     pass
     
@@ -28,7 +31,7 @@ class Union():
     def __hash__(self):
         return hash(frozenset(self.members))
 
-def lattice_join(a, b):
+def join(a, b):
     # ⊥ disappears
     if isinstance(a, Unassigned):
         return b

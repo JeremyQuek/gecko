@@ -44,16 +44,16 @@ class VariableProgramMap():
                     # Handles multi-assignment a,b=1,2
                     if isinstance(node.targets[0], ast.Tuple):
                         for right_expr,left_expr in zip(node.targets[0].elts, node.value.elts):
-                            event = self.evaluate_expr(right_expr, left_expr, symbol_table, scope)
+                            event = self.evaluate_assignmet(right_expr, left_expr, symbol_table, scope)
                     else:
                         right_expr = node.targets[0] 
                         left_expr =  node.value
-                        event = self.evaluate_expr(right_expr, left_expr, symbol_table, scope)
+                        event = self.evaluate_assignmet(right_expr, left_expr, symbol_table, scope)
 
                 elif isinstance(node, ast.AugAssign):
                     right_expr = node.target
                     left_expr =  node.value
-                    event = self.evaluate_expr(right_expr, left_expr, symbol_table, scope)
+                    event = self.evaluate_assignmet(right_expr, left_expr, symbol_table, scope)
                 
                 identifier,raw_type,line = event
                 if not (isinstance(raw_type, Unassigned)):
@@ -64,16 +64,13 @@ class VariableProgramMap():
             # elif (isinstance(node,ast.FunctionDef)):
             #     pass
 
-    def evaluate_expr(self, right_expr, left_expr, symbol_table, scope):
-
-        line = right_expr.lineno
-        identifier = right_expr.id
-
-        if identifier not in symbol_table:
-            symbol_table.insert(identifier, Unassigned(), 0, scope)
-        
+    def evaluate_assignmet(self, right_expr: ast.Target, left_expr, symbol_table: SymbolTable, scope: Scope)-> list[str, int, int]:
+        identifier,line = self.evaluate_target(right_expr, symbol_table, scope)
+        raw_type = self.evaluate_rhs(left_expr, symbol_table, scope)
+        return (identifier,raw_type,line)
+    
+    def evaluate_rhs(self, left_expr, symbol_table: SymbolTable, scope: Scope)-> str:
         raw_type = Unassigned()
-
         if isinstance(left_expr, ast.Constant):
             raw_obj = ast.literal_eval(left_expr)
             raw_type = type(raw_obj)
@@ -85,13 +82,16 @@ class VariableProgramMap():
             left_identifier_table = symbol_table[left_identifier]
             left_identifier_latest_entry = left_identifier_table[-1]
             raw_type = left_identifier_latest_entry.type
-        elif isinstance(left_expr, ast.Call):
-            # TODO
-            # Support typing functions as first class variables
-            pass
-        
-        return (identifier,raw_type,line)
-        
+        return raw_type
+
+    def evaluate_target(self, right_expr: ast.Target, symbol_table: SymbolTable, scope: Scope)-> list[str, int]:
+        line = right_expr.lineno
+        identifier = right_expr.id
+
+        if identifier not in symbol_table:
+            symbol_table.insert(identifier, Unassigned(), 0, scope)
+
+        return identifier,line
 
     def build_file_ast(self, file: str) -> ast.Module:
         with open(file) as f:
@@ -105,3 +105,34 @@ class VariableProgramMap():
 
     def __repr__(self) -> str:
         return f"VariableProgramMap(file={self.file!r})"
+
+
+class ConstantExprEvaluator():
+    pass
+
+class NameExprEvaluator():
+    pass
+
+class FunctionDefExprEvaluator():
+    pass
+
+class CallExprEvaluator():
+    pass
+
+class TenaryExprEvaluator():
+    pass
+
+class ClassExprEvaluator():
+    pass
+
+class MethodCallExprEvaluator():
+    pass
+
+class ListExprEvaluator():
+    pass
+
+class IteratorExprEvaluator():
+    pass
+
+class ForExprEvaluator():
+    pass
