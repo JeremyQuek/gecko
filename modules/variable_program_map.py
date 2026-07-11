@@ -79,24 +79,30 @@ class VariableProgramMap():
                     symbol_table.insert(identifier, Unassigned(), 0, scope)
                 if not (isinstance(raw_type, Unassigned)):
                     symbol_table.insert(identifier, raw_type, line, scope)
-    
+
+            # multi assignment
+            elif isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Tuple):
+                for right_expr,left_expr in zip(node.targets[0].elts, node.value.elts):
+                    identifier,raw_type,line = self.evaluate_assignmet(right_expr, left_expr)
+
+                    if identifier not in symbol_table:
+                        symbol_table.insert(identifier, Unassigned(), 0, scope)
+
+                    if not (isinstance(raw_type, Unassigned)):
+                        symbol_table.insert(identifier, raw_type, line, scope)
+
+            # normal assignment
             elif isinstance(node, ast.Assign):
-                event = None
-                # Handles multi-assignment a,b=1,2
-                if isinstance(node.targets[0], ast.Tuple):
-                    for right_expr,left_expr in zip(node.targets[0].elts, node.value.elts):
-                        event = self.evaluate_assignmet(right_expr, left_expr)
-                else:
-                    right_expr = node.targets[0] 
-                    left_expr =  node.value
-                    event = self.evaluate_assignmet(right_expr, left_expr)
+                right_expr = node.targets[0] 
+                left_expr =  node.value
+                identifier,raw_type,line = self.evaluate_assignmet(right_expr, left_expr)
                 
-                identifier,raw_type,line = event
                 if identifier not in symbol_table:
                     symbol_table.insert(identifier, Unassigned(), 0, scope)
 
                 if not (isinstance(raw_type, Unassigned)):
                     symbol_table.insert(identifier, raw_type, line, scope)
+
 
         start_line = code_block[0].lineno if code_block else 0
         end_line = code_block[-1].end_lineno if code_block else 0
@@ -111,16 +117,14 @@ class VariableProgramMap():
         symbol_table = self.symbol_table_stack[-1]
         raw_type = Unassigned()
         if isinstance(left_expr, ast.Constant):
-            raw_obj = ast.literal_eval(left_expr)
-            raw_type = type(raw_obj)
+            evaluator = ConstantExprEvaluator
+            raw_type = evaluator.evaluate(left_expr)
 
         elif isinstance(left_expr, ast.Name):
             # TODO
             # Add checks if the leftmost identifier doesnt exist in the program! (Users can make mistakes in their code)
-            left_identifier = left_expr.id 
-            left_identifier_table = symbol_table[left_identifier]
-            left_identifier_latest_entry = left_identifier_table[-1]
-            raw_type = left_identifier_latest_entry.type
+            evaluator = NameExprEvaluator
+            raw_type = evaluator.evaluate(left_expr, symbol_table)
         return raw_type
 
     def evaluate_target(self, right_expr: ast.Target)-> list[str, int]:
@@ -144,20 +148,22 @@ class VariableProgramMap():
     def __repr__(self) -> str:
         return f"VariableProgramMap(file={self.file!r})"
 
-
-
-
-class ExprEvaluateController():
+class ExprEvaluator:
     pass
 
-class ExprEvaluator():
-    pass
+class ConstantExprEvaluator():
+    def evaluate(expr):
+        raw_obj = ast.literal_eval(expr)
+        raw_type = type(raw_obj)
+        return raw_type
 
-class ConstantExprEvaluator(ExprEvaluator):
-    pass
-
-class NameExprEvaluator(ExprEvaluator):
-    pass
+class NameExprEvaluator():
+    def evaluate(expr, symbol_table):
+        left_identifier = expr.id 
+        left_identifier_table = symbol_table[left_identifier]
+        left_identifier_latest_entry = left_identifier_table[-1]
+        raw_type = left_identifier_latest_entry.type
+        return raw_type
 
 class FunctionDefExprEvaluator(ExprEvaluator):
     pass
