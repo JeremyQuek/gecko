@@ -37,7 +37,7 @@ class SymbolTable():
         self.tables[scope][_id].append(SymbolTableEntry(_type, line, **kwargs))
     
     def insert_free_variable(self, _id: str, _type: type, line: int, namespace_id: UUID, **kwargs) -> None:
-        for (_ns_id, enclosing_dict) in self.tables[Scope.ENCLOSING]:
+        for (_ns_id, enclosing_dict) in self.tables[Sccommope.ENCLOSING]:
             if _ns_id == namespace_id:
                 enclosing_dict[_id].append(SymbolTableEntry(_type, line, **kwargs))
                 return
