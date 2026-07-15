@@ -20,7 +20,7 @@ class SymbolTable():
             # TODO: switch from index-based list to id-keyed dict so mutations
             # can be propagated back across call boundaries (indexes are only
             # meaningful within a single call chain, not when merging back up).
-            Scope.ENCLOSING: [],
+            Scope.ENCLOSING: [],  # list[tuple[UUID, defaultdict[str, list]]]
             Scope.LOCAL: defaultdict(list)
         }
 
@@ -35,18 +35,19 @@ class SymbolTable():
     def fork_for_branch(self) -> SymbolTable:
         return self.fork()
 
-    def fork_for_function(self, parameters_list: list[tuple[str, type, int]], child_namespace_id) -> SymbolTable:
+    def fork_for_function_def(self, parameters_list: list[tuple[str, type, int]], parent_namespace_id) -> SymbolTable:
         # Fork and change scopes
         child = SymbolTable()
         child.table[Scope.GLOBAL] = deepcopy(self.table[Scope.GLOBAL])
-        child.table[Scope.ENCLOSING] = deepcopy(self.table[Scope.ENCLOSING])
 
+        # Deepcopy the enclosing environment so that assingments don't mutate the external env
+        child.table[Scope.ENCLOSING] = deepcopy(self.table[Scope.ENCLOSING])
         parent_enclosure= defaultdict(list)
         for _id, sub_table in self.table[Scope.LOCAL].items():
             for entry in sub_table:
                 parent_enclosure[_id].append(SymbolTableEntry(entry.type, entry.line))
         
-        child.table[Scope.ENCLOSING].append(parent_enclosure)
+        child.table[Scope.ENCLOSING].append((parent_namespace_id, parent_enclosure))
 
         # insert params
         for arg__id, arg_type, arg_line in parameters_list:

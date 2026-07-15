@@ -6,3 +6,5 @@ class FunctionArtifact:
         self.namespace_id = namespace_id
         self.ast_node = ast_node 
         self.free_variables = free_variables
+
+        self.cache = {}
