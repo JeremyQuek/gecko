@@ -29,7 +29,7 @@ class Linearizer:
         seen = set()
         result = []
         for symbol_table, start_line, end_line in tree.tree:
-            for scope, scope_dict in symbol_table.tables.items():
+            for scope, scope_dict in symbol_table.sections.items():
                 if scope in (Scope.ENCLOSING, Scope.BUILTIN):
                     continue
                 for identifier, entries in scope_dict.items():

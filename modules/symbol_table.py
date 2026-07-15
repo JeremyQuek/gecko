@@ -6,7 +6,7 @@ from copy import deepcopy
 from collections import defaultdict
 from uuid import UUID
 
-from modules.scopes import Scope
+from modules.scopes import Scope, BUILTIN, GLOBAL, ENCLOSING, LOCAL
 from modules.type_lattice import Unassigned, join
 
 class SymbolTableEntry():
@@ -14,37 +14,38 @@ class SymbolTableEntry():
         self.type = _type
         self.line = line
         self.artifact = artifact
+
 class SymbolTable():
     def __init__(self) -> None:
-        self.tables= {
-            Scope.BUILTIN: defaultdict(list),
-            Scope.GLOBAL: defaultdict(list),
+        self.sections= {
+            BUILTIN: defaultdict(list),
+            GLOBAL: defaultdict(list),
 
-            # Scope.ENCLOSING is meant to entirely be a function definition side effect save copy of previous locals for best-effort
-            # definition body analysis. It is not used outside of that, when the enclosure environment is stored into FunctionArtifact
+            # ENCLOSING is meant to entirely be a function definition side effect save copy of previous locals for best-effort
+            # definition body analysis. It is not used outside of that, when the enclosure environment is stored into FunctionMetadata
             # which is used for call site
-            Scope.ENCLOSING: [],  # list[tuple[UUID, defaultdict[str, list]]] 
+            ENCLOSING: [],  # list[tuple[UUID, defaultdict[str, list]]] 
 
-            Scope.LOCAL: defaultdict(list)
+            LOCAL: defaultdict(list)
         }
 
         for name in dir(builtins):
             obj = getattr(builtins, name)
             _type =  type(obj)
-            self.insert(name, _type, 0, Scope.BUILTIN)
+            self.insert(name, _type, 0, BUILTIN)
 
     def insert(self, _id: str, _type: type, line: int, scope: Scope, **kwargs) -> None:
-        self.tables[scope][_id].append(SymbolTableEntry(_type, line, **kwargs))
+        self.sections[scope][_id].append(SymbolTableEntry(_type, line, **kwargs))
     
     def insert_free_variable(self, _id: str, _type: type, line: int, namespace_id: UUID, **kwargs) -> None:
-        for (_ns_id, enclosing_dict) in self.tables[Sccommope.ENCLOSING]:
+        for (_ns_id, enclosing_dict) in self.sections[Sccommope.ENCLOSING]:
             if _ns_id == namespace_id:
                 enclosing_dict[_id].append(SymbolTableEntry(_type, line, **kwargs))
                 return
 
     def fork(self) -> SymbolTable:
         child = SymbolTable()
-        child.tables = deepcopy(self.tables)
+        child.sections = deepcopy(self.sections)
         return child
 
     def fork_for_branch(self) -> SymbolTable:
@@ -53,20 +54,20 @@ class SymbolTable():
     def fork_for_function_def(self, parameters_list: list[tuple[str, type, int]], parent_namespace_id: UUID) -> SymbolTable:
         # Fork and change scopes
         child = SymbolTable()
-        child.tables[Scope.GLOBAL] = deepcopy(self.tables[Scope.GLOBAL])
+        child.sections[GLOBAL] = deepcopy(self.sections[GLOBAL])
 
         # Deepcopy the enclosing environment so that assingments don't mutate the external env
-        child.tables[Scope.ENCLOSING] = deepcopy(self.tables[Scope.ENCLOSING])
+        child.sections[ENCLOSING] = deepcopy(self.sections[ENCLOSING])
         parent_enclosure= defaultdict(list)
-        for _id, sub_table in self.tables[Scope.LOCAL].items():
+        for _id, sub_table in self.sections[LOCAL].items():
             for entry in sub_table:
                 parent_enclosure[_id].append(SymbolTableEntry(entry.type, entry.line))
         
-        child.tables[Scope.ENCLOSING].append((parent_namespace_id, parent_enclosure))
+        child.sections[ENCLOSING].append((parent_namespace_id, parent_enclosure))
 
         # insert params
         for arg__id, arg_type, arg_line in parameters_list:
-            child.insert(arg__id, arg_type, arg_line, Scope.LOCAL)
+            child.insert(arg__id, arg_type, arg_line, LOCAL)
         
         return child
 
@@ -74,13 +75,13 @@ class SymbolTable():
         # Snapshot: how many entries each _id has in this scope before branching.
         parent_lengths = {
             _id: len(entries)
-            for _id, entries in self.tables[scope].items()
+            for _id, entries in self.sections[scope].items()
         }
 
         # Only consider _ids modified in at least one branch.
         touched = set()
         for branch in branches:
-            for _id, entries in branch.tables[scope].items():
+            for _id, entries in branch.sections[scope].items():
                 pre = parent_lengths.get(_id, 0)
                 if len(entries) > pre:
                     touched.add(_id)
@@ -91,22 +92,22 @@ class SymbolTable():
             branch_types = []
 
             for branch in branches:
-                entries = branch.tables[scope].get(_id)
+                entries = branch.sections[scope].get(_id)
 
                 if entries and len(entries) > pre:
                     branch_types.append(entries[-1].type)
                 else:
-                    parent_entries = self.tables[scope].get(_id)
+                    parent_entries = self.sections[scope].get(_id)
                     branch_types.append(
                         parent_entries[-1].type if parent_entries else Unassigned()
                     )
 
-            if _id not in self.tables[scope] or not parent_branch:
-                if _id not in self.tables[scope]:
+            if _id not in self.sections[scope] or not parent_branch:
+                if _id not in self.sections[scope]:
                     self.insert(_id, Unassigned(), 0, scope)
                 merged_type = Unassigned()
             else:
-                merged_type = self.tables[scope][_id][-1].type
+                merged_type = self.sections[scope][_id][-1].type
 
             for _type in branch_types:
                 merged_type = join(merged_type, _type)
@@ -146,7 +147,7 @@ class SymbolTable():
         for scope in Scope:
             lines.append(f"\n[{scope.name}]")
 
-            scope_table = self.tables.get(scope, {})
+            scope_table = self.sections.get(scope, {})
             if not scope_table:
                 lines.append("  (empty)")
                 continue

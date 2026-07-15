@@ -1,6 +1,6 @@
 import ast
 
-from modules.scopes import Scope, ScopeFrame
+from modules.scopes import Scope, ScopeFrame, BUILTIN, GLOBAL, ENCLOSING, LOCAL
 from modules.symbol_table import SymbolTable
 from modules.type_lattice import Unassigned, Unknown
 
@@ -29,28 +29,28 @@ class NameExprEvaluator():
 
         # LEGB resolution
         # Try local
-        if scope_frame.scope_kind == Scope.LOCAL:
-            if _id in symbol_table.tables[Scope.LOCAL]:
-                return self._resolve_from(_id, symbol_table, Scope.LOCAL)
+        if scope_frame.scope_kind == LOCAL:
+            if _id in symbol_table.sections[LOCAL]:
+                return self._resolve_from(_id, symbol_table, LOCAL)
 
         # Try enclosing
-        for (_ns_id, enclosing_dict) in reversed(symbol_table.tables[Scope.ENCLOSING]):
+        for (_ns_id, enclosing_dict) in reversed(symbol_table.sections[ENCLOSING]):
             if _id in enclosing_dict:
                 return enclosing_dict[_id][-1].type
 
         # Try Global 
         global_frame = scope_frame_stack[0]
-        if _id in global_frame.symbol_table.tables[Scope.GLOBAL]:
-            return self._resolve_from(_id, global_frame.symbol_table, Scope.GLOBAL)
+        if _id in global_frame.symbol_table.sections[GLOBAL]:
+            return self._resolve_from(_id, global_frame.symbol_table, GLOBAL)
 
         # Try builtin
-        if _id in global_frame.symbol_table.tables[Scope.BUILTIN]:
-            return self._resolve_from(_id, global_frame.symbol_table, Scope.BUILTIN)
+        if _id in global_frame.symbol_table.sections[BUILTIN]:
+            return self._resolve_from(_id, global_frame.symbol_table, BUILTIN)
 
         return Unknown()
 
     def _resolve_from(self, _id: str, symbol_table: SymbolTable, scope: Scope) -> type:
-        entries = symbol_table.tables[scope].get(_id)
+        entries = symbol_table.sections[scope].get(_id)
         if entries:
             return entries[-1].type
         return Unassigned()

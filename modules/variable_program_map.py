@@ -3,11 +3,11 @@ import types
 from uuid import uuid4
 from copy import deepcopy
 
-from modules.scopes import Scope, ScopeFrame
+from modules.scopes import Scope, GlobalScope, FunctionScope, BranchScope, ClassScope, BUILTIN, GLOBAL, ENCLOSING, LOCAL, CLASS
 from modules.symbol_table import SymbolTable
 from modules.type_lattice import Unassigned, Unknown
 from modules.lexical_scope_tree import LexicalScopeTree
-from modules.function_artifact import FunctionArtifact
+from modules.function_metadata import FunctionMetadata
 from modules.expression_evaluators import ConstantExprEvaluator, NameExprEvaluator
 
 # TODO
@@ -24,7 +24,7 @@ class VariableProgramMap():
     def trace(self) -> None:
         self.global_table = SymbolTable()
         global_namespace_id = uuid4()
-        self.scope_frame_stack.append(ScopeFrame(global_namespace_id, self.global_table, Scope.GLOBAL))
+        self.scope_frame_stack.append(GlobalScope(global_namespace_id, self.global_table, GLOBAL))
         self.analyze_code_block(self.file_ast.body)
 
     # TODO
@@ -41,7 +41,7 @@ class VariableProgramMap():
         for node in code_block:
             if isinstance(node, ast.If):
                 if_symbol_table = symbol_table.fork_for_branch()
-                self.scope_frame_stack.append(ScopeFrame(current_namespace_id, if_symbol_table, scope))
+                self.scope_frame_stack.append(BranchScope(current_namespace_id, if_symbol_table, scope, modified_symbol_scopes=scope_frame.modified_symbol_scopes))
                 self.analyze_code_block(node.body)
                 self.scope_frame_stack.pop()
 
@@ -50,7 +50,7 @@ class VariableProgramMap():
                     continue
 
                 else_symbol_table = symbol_table.fork_for_branch()
-                self.scope_frame_stack.append(ScopeFrame(current_namespace_id, else_symbol_table, scope))
+                self.scope_frame_stack.append(BranchScope(current_namespace_id, else_symbol_table, scope, modified_symbol_scopes=scope_frame.modified_symbol_scopes))
                 self.analyze_code_block(node.orelse)
                 self.scope_frame_stack.pop()
 
@@ -58,7 +58,7 @@ class VariableProgramMap():
             
             elif isinstance(node, ast.While):
                 while_symbol_table = symbol_table.fork_for_branch()
-                self.scope_frame_stack.append(ScopeFrame(current_namespace_id, while_symbol_table, scope))
+                self.scope_frame_stack.append(BranchScope(current_namespace_id, while_symbol_table, scope, modified_symbol_scopes=scope_frame.modified_symbol_scopes))
                 self.analyze_code_block(node.body)
                 self.scope_frame_stack.pop()
 
@@ -75,7 +75,7 @@ class VariableProgramMap():
                 self.evaluate_assignment(right_expr, left_expr)
 
                 for_symbol_table = symbol_table.fork_for_branch()
-                self.scope_frame_stack.append(ScopeFrame(current_namespace_id, for_symbol_table, scope))
+                self.scope_frame_stack.append(BranchScope(current_namespace_id, for_symbol_table, scope, modified_symbol_scopes=scope_frame.modified_symbol_scopes))
                 self.analyze_code_block(node.body)
                 self.scope_frame_stack.pop()
 
@@ -113,7 +113,7 @@ class VariableProgramMap():
                 function_def_symbol_table= symbol_table.fork_for_function_def(parameters_list, current_namespace_id)
 
                 # Step 4: Update the scope stack
-                self.scope_frame_stack.append(ScopeFrame(func_namespace_id, function_def_symbol_table, Scope.LOCAL))
+                self.scope_frame_stack.append(FunctionScope(func_namespace_id, function_def_symbol_table, LOCAL))
 
                 # Step 5: Recurse analysis on the function body
                 self.analyze_code_block(node.body)
@@ -122,31 +122,31 @@ class VariableProgramMap():
                 self.scope_frame_stack.pop()
 
                 # Step 7: TODO
-                enclosure_environment = []
+                closure_environment = []
                 for i in range(len(self.scope_frame_stack)-1, -1, -1):
                     ancestor_scope_frame = self.scope_frame_stack[i]
                     ancestor_symbol_table = ancestor_scope_frame.symbol_table
                     ancestor_id = ancestor_scope_frame.namespace_id
-                    enclosure_environment.append(self.scope_frame_stack[i])
+                    closure_environment.append(self.scope_frame_stack[i])
 
                 # Step 8: Update the current symbol table with the new reference binding to the function object type
                 func_name = node.name
                 func_line = node.lineno
-                func_artifact = FunctionArtifact(node, func_namespace_id, enclosure_environment)
-                symbol_table.insert(func_name, types.FunctionType, func_line, scope, artifact=func_artifact)
+                func_metadata = FunctionMetadata(node, func_namespace_id, closure_environment)
+                symbol_table.insert(func_name, types.FunctionType, func_line, scope, artifact=func_metadata)
 
             # TODO: Add error handling of invalid call of global
             elif isinstance(node, ast.Global):
                 for _id in node.names:
                     global_scope = self.scope_frame_stack[0].namespace_id
-                    scope_frame.modified_symbol_scopes[_id] = (global_scope, Scope.GLOBAL)
+                    scope_frame.modified_symbol_scopes[_id] = (global_scope, GLOBAL)
 
             # Walk up the recursion stack
             # TODO: Add error handling of invalid call of nonlocal
             elif isinstance(node, ast.Nonlocal):
                 for _id in node.names:
                     origin_scope = self.resolve_symbol_origin(_id)
-                    scope_frame.modified_symbol_scopes[_id] = (origin_scope, Scope.LOCAL)
+                    scope_frame.modified_symbol_scopes[_id] = (origin_scope, LOCAL)
 
             # Aug assign statement
             elif isinstance(node, ast.AugAssign):
@@ -176,25 +176,32 @@ class VariableProgramMap():
         target_scope = scope
 
         in_function_definition = True
-        # If in local scope and _id was declared global/nonlocal, redirect to the target
-        if scope == Scope.LOCAL and _id in scope_frame.modified_symbol_scopes:
+        
+        # TODO: Refactor to make the branching more explicit rahter than trying to be clever and conscise with code like how ai does it
+
+        # If we are in a function scope (valid to have nonlocal/global)
+        # And the target id has been modified, then we see if we need to target other scopes
+        # In the else case, we should insert direct to wtv scope were in (local or global)
+        if _id in scope_frame.modified_symbol_scopes:
             target_namespace_id, target_scope = scope_frame.modified_symbol_scopes[_id]
             if in_function_definition:
-                # During definition: write to local copy in ENCLOSING or GLOBAL
-                if target_scope == Scope.GLOBAL:
+                # If inside a function definition, the changes to global and nonlocal 
+                # should affect the local copy of the enclosure and global vars
+                if target_scope == GLOBAL:
                     target_table = symbol_table
+
                 else:
                     if not isinstance(raw_type, Unassigned):
                         symbol_table.insert_free_variable(_id, raw_type, line, target_namespace_id)
                     return
             else:
-                # At callsite: mutate the real ancestor's table
+                # Else if at the callsite, then we mutate the real ancestor's table
                 for frame in self.scope_frame_stack:
                     if frame.namespace_id == target_namespace_id:
                         target_table = frame.symbol_table
                         break
 
-        if _id not in target_table.tables[target_scope]:
+        if _id not in target_table.sections[target_scope]:
             target_table.insert(_id, Unassigned(), 0, target_scope)
 
         if not isinstance(raw_type, Unassigned):
@@ -225,7 +232,7 @@ class VariableProgramMap():
         for i in range(len(self.scope_frame_stack)-2, -1, -1):
             _scope_frame = self.scope_frame_stack[i]
             _symbol_table = _scope_frame.symbol_table
-            if _id in _symbol_table.tables[Scope.LOCAL]:
+            if _id in _symbol_table.sections[LOCAL]:
                 return _scope_frame.namespace_id
         return None
 

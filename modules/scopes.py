@@ -9,6 +9,12 @@ class Scope(Enum):
     LOCAL = "L"
     CLASS = "C"
 
+BUILTIN = Scope.BUILTIN
+GLOBAL = Scope.GLOBAL
+ENCLOSING = Scope.ENCLOSING
+LOCAL = Scope.LOCAL
+CLASS = Scope.CLASS
+
 @dataclass
 class ScopeFrame:
     namespace_id: UUID
@@ -17,3 +23,19 @@ class ScopeFrame:
     start_line: int = 0
     end_line: int = 0
     modified_symbol_scopes: dict = field(default_factory=dict)
+
+@dataclass 
+class GlobalScope(ScopeFrame):
+    pass
+
+@dataclass
+class FunctionScope(ScopeFrame):
+    pass
+
+@dataclass
+class BranchScope(ScopeFrame):
+    pass
+
+@dataclass
+class ClassScope(ScopeFrame):
+    pass
