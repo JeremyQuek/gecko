@@ -1,8 +1,9 @@
 import ast
 from collections import defaultdict
 
+import ast_custom
+from ast_custom import *
 from lexical_environment import LexicalEnvironment
-from custom_ast_node import Body, FunctionBody, ClassBody
 
 class Node():
     def __init__(self, block = None, enviroment = None):
@@ -26,16 +27,20 @@ class ControlFlowGraph():
     mapping= {
         ast.FunctionDef : DefinitionNode,
         ast.ClassDef : DefinitionNode,
-        Body: BodyNode,
-        FunctionBody: BodyNode,
-        ClassBody: BodyNode,
+        ast.For: ControlFlowNode,
+        ast.While: ControlFlowNode,
+        ast.If: ControlFlowNode,
+        ast_custom.Body: BodyNode,
+        ast_custom.FunctionBody: BodyNode,
+        ast_custom.ClassBody: BodyNode,
+        ast_custom.IfBody: BodyNode,
+        ast_custom.ElseBody: BodyNode,
         }
 
     def __init__(self):
         self.entry = EntryNode()
-        self.nodes = {0: self.entry}
+        self.nodes = {self.entry: self.entry}
         self.edges=[]
-        self.adj = defaultdict(list)
 
         # For pretty print
         self._id_counter = 0
@@ -44,7 +49,7 @@ class ControlFlowGraph():
     def insert(self, parent: ast.AST, child: ast.AST)->None:
         u = self.entry if parent is None else self._get_node(parent) 
         v = self._get_node(child)
-        self.adj[u].append(v)
+        u.next.append(v)
         self.edges.append([u,v])
 
 
@@ -68,25 +73,8 @@ class ControlFlowGraph():
         return node
 
     """
-    Post AST Walk Graph topology changes
-    """
-    def _append_exit_nodes():
-        pass
-
-    def _format_class_bodies():
-        pass
-    
-    def _split_control_flow():
-        pass
-    
-    def _append_execution_graph_at_call_site():
-        pass
-
-
-    """
     Prints the edge list in a format pasteable into 
-    graphonline.top/create_graph_by_edge_list 
-    for visual debugging.
+    graphonline.top/create_graph_by_edge_list for visual debugging.
     """
     def _pretty_print(self):
         
@@ -100,6 +88,10 @@ class ControlFlowGraph():
         if isinstance(node, ExitNode):
             return f"Exit({nid})"
         block = node.block
+        if isinstance(block, IfBody):
+            return f"IfBody({nid})"
+        if isinstance(block, ElseBody):
+            return f"ElseBody({nid})"
         if isinstance(block, FunctionBody):
             return f"FuncBody({nid})"
         if isinstance(block, ClassBody):
@@ -110,6 +102,8 @@ class ControlFlowGraph():
             return f"FuncDef({nid})"
         if isinstance(block, ast.ClassDef):
             return f"ClassDef({nid})"
+        if isinstance(block, ast.If) or isinstance(block, ast.For) or isinstance(block, ast.While):
+            return f"Branch({nid})"
         return f"Node({nid})"
     
 

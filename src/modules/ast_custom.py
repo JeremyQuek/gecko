@@ -1,3 +1,6 @@
+
+import ast
+
 """
 Custom AST nodes for representing spliced statement blocks in the CFG.
 
@@ -11,8 +14,6 @@ the CFG and downstream analysis to differentiate module-level code from
 function bodies and class bodies without inspecting the parent.
 """
 
-import ast
-
 class Body(ast.AST):
     _fields = ('body',)
     _attributes = ('lineno', 'col_offset', 'end_lineno', 'end_col_offset')
@@ -24,5 +25,7 @@ class Body(ast.AST):
         self.end_lineno = end_lineno
         self.end_col_offset = end_col_offset
 
+class IfBody(Body): pass
+class ElseBody(Body): pass
 class ClassBody(Body): pass
 class FunctionBody(Body): pass
