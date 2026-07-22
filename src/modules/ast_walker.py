@@ -71,7 +71,7 @@ class ASTWalker():
                 case ast.FunctionDef():
                     if r > l:
                         stmts = code_body[l:r]
-                        cfg_nodes.append([Customast_custom.Body(
+                        cfg_nodes.append([CustomBody(
                             body=stmts,
                             lineno=stmts[0].lineno,
                             col_offset=stmts[0].col_offset,
@@ -79,7 +79,7 @@ class ASTWalker():
                             end_col_offset=stmts[-1].end_col_offset,
                         )])
                     cfg_nodes.append([cur_node])
-                    func_body = ast_custom.Functionast_custom.Body(
+                    func_body = ast_custom.FunctionBody(
                         body=cur_node.body,
                         lineno=cur_node.body[0].lineno,
                         col_offset=cur_node.body[0].col_offset,
@@ -92,7 +92,7 @@ class ASTWalker():
                 case ast.ClassDef():
                     if r > l:
                         stmts = code_body[l:r]
-                        cfg_nodes.append([Customast_custom.Body(
+                        cfg_nodes.append([CustomBody(
                             body=stmts,
                             lineno=stmts[0].lineno,
                             col_offset=stmts[0].col_offset,
@@ -101,7 +101,7 @@ class ASTWalker():
                         )])
                     cfg_nodes.append([cur_node])
 
-                    class_body = ast_custom.Classast_custom.Body(
+                    class_body = ast_custom.ClassBody(
                         body=cur_node.body,
                         lineno=cur_node.body[0].lineno,
                         col_offset=cur_node.body[0].col_offset,
@@ -127,7 +127,7 @@ class ASTWalker():
                         )])
                     cfg_nodes.append([cur_node])
 
-                    if_body = ast_custom.Ifast_custom.Body(
+                    if_body = ast_custom.IfBody(
                         body=cur_node.body,
                         lineno=cur_node.body[0].lineno,
                         col_offset=cur_node.body[0].col_offset,
@@ -137,7 +137,7 @@ class ASTWalker():
                     if_tail = self.parse(if_body, parent=cur_node)
 
                     if cur_node.orelse:
-                        else_body = ast_custom.Elseast_custom.Body(
+                        else_body = ast_custom.ElseBody(
                             body=cur_node.orelse,
                             lineno=cur_node.orelse[0].lineno,
                             col_offset=cur_node.orelse[0].col_offset,
@@ -145,7 +145,7 @@ class ASTWalker():
                             end_col_offset=cur_node.orelse[-1].end_col_offset,
                         )
                     else:
-                        else_body = ast_custom.Elseast_custom.Body(body=[ast_custom.Elseast_custom.Body()])
+                        else_body = ast_custom.ElseBody(body=[ast_custom.ElseBody()])
                     else_tail = self.parse(else_body, parent=cur_node)
 
                     tail = if_tail + else_tail
@@ -153,10 +153,10 @@ class ASTWalker():
                     for tail_node in tail:
                         skip.add((cur_node, tail_node))
                     l = r+1
-
+                
         if l < len(code_body):
             stmts = code_body[l:]
-            cfg_nodes.append([Customast_custom.Body(
+            cfg_nodes.append([CustomBody(
                 body=stmts,
                 lineno=stmts[0].lineno,
                 col_offset=stmts[0].col_offset,
